@@ -345,6 +345,35 @@ export default function App() {
   };
 
   // --- Handlers ---
+  const handleFileAction = async (side: 'left' | 'right', file: VirtualFile) => {
+    const setPanel = setLeftPanel;
+    if (file.type === 'dir') {
+      if (file.id === 'up') {
+        setPanel(prev => ({ ...prev, currentDirId: file.parentId, selectedIndex: 0 }));
+      } else {
+        setPanel(prev => ({ ...prev, currentDirId: file.id, selectedIndex: 0 }));
+      }
+    } else {
+      if (connectionMode === 'local' && file.path) {
+        try {
+          addLog('system_output', `OPENING_FILE: ${file.path}`);
+          const response = await fetch(`/api/files/content?path=${encodeURIComponent(file.path)}`);
+          const data = await response.json();
+          setSelectedFile({ ...file, content: data.content });
+          setEditorContent(data.content || '');
+          setActiveTab('coding');
+        } catch (error) {
+          addLog('error', `FAILED_TO_OPEN_FILE: ${file.path}`);
+          console.error('Failed to fetch file content:', error);
+        }
+      } else {
+        setSelectedFile(file);
+        setEditorContent(file.content || '');
+        setActiveTab('coding');
+      }
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (showEditor || (e.target as HTMLElement).tagName === 'INPUT') return;
 
@@ -361,35 +390,7 @@ export default function App() {
       case 'Enter':
         const selectedFile = panel.files[panel.selectedIndex];
         if (selectedFile) {
-          if (selectedFile.type === 'dir') {
-            if (selectedFile.id === 'up') {
-              setPanel(prev => ({ ...prev, currentDirId: selectedFile.parentId, selectedIndex: 0 }));
-            } else {
-              setPanel(prev => ({ ...prev, currentDirId: selectedFile.id, selectedIndex: 0 }));
-            }
-          } else {
-            // Open file
-            const openFile = async () => {
-              if (connectionMode === 'local' && selectedFile.path) {
-                try {
-                  addLog('system_output', `OPENING_FILE: ${selectedFile.path}`);
-                  const response = await fetch(`/api/files/content?path=${encodeURIComponent(selectedFile.path)}`);
-                  const data = await response.json();
-                  setSelectedFile({ ...selectedFile, content: data.content });
-                  setEditorContent(data.content || '');
-                  setActiveTab('coding');
-                } catch (error) {
-                  addLog('error', `FAILED_TO_OPEN_FILE: ${selectedFile.path}`);
-                  console.error('Failed to fetch file content:', error);
-                }
-              } else {
-                setSelectedFile(selectedFile);
-                setEditorContent(selectedFile.content || '');
-                setActiveTab('coding');
-              }
-            };
-            openFile();
-          }
+          handleFileAction('left', selectedFile);
         }
         break;
       case 'F1': // Help
@@ -402,26 +403,7 @@ export default function App() {
       case 'F4': // Edit
         const fileToEdit = panel.files[panel.selectedIndex];
         if (fileToEdit && fileToEdit.type === 'file') {
-          const openFile = async () => {
-            if (connectionMode === 'local' && fileToEdit.path) {
-              try {
-                addLog('system_output', `EDITING_FILE: ${fileToEdit.path}`);
-                const response = await fetch(`/api/files/content?path=${encodeURIComponent(fileToEdit.path)}`);
-                const data = await response.json();
-                setSelectedFile({ ...fileToEdit, content: data.content });
-                setEditorContent(data.content || '');
-                setActiveTab('coding');
-              } catch (error) {
-                addLog('error', `FAILED_TO_EDIT_FILE: ${fileToEdit.path}`);
-                console.error('Failed to fetch file content:', error);
-              }
-            } else {
-              setSelectedFile(fileToEdit);
-              setEditorContent(fileToEdit.content || '');
-              setActiveTab('coding');
-            }
-          };
-          openFile();
+          handleFileAction('left', fileToEdit);
         }
         break;
       case 'F7': // Mkdir
@@ -1047,10 +1029,10 @@ export default function App() {
         )}
         onClick={() => setActivePanel(side)}
       >
-        <div className="nc-header py-2 px-4 flex justify-between items-center bg-nc-black">
+        <div className="nc-header py-3 px-4 flex justify-between items-center bg-nc-black">
           <div className="flex items-center gap-2">
-            <div className={cn("w-1.5 h-1.5 rounded-full", isActive ? "bg-nc-accent animate-pulse" : "bg-nc-gray")} />
-            <span className="text-[10px] uppercase tracking-[0.2em]">{side} PANEL</span>
+            <div className={cn("w-2 h-2 rounded-full", isActive ? "bg-nc-accent animate-pulse" : "bg-nc-gray")} />
+            <span className="text-[10px] uppercase tracking-[0.2em] font-bold">{side} PANEL</span>
           </div>
           <span className="text-[9px] opacity-50 font-mono tracking-widest">PATH: /{state.currentDirId || 'ROOT'}</span>
         </div>
@@ -1058,9 +1040,9 @@ export default function App() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="text-nc-gray border-b border-nc-border text-[9px] uppercase tracking-widest">
-                <th className="p-2 font-normal">Object Name</th>
-                <th className="p-2 font-normal text-right">Size</th>
-                <th className="p-2 font-normal text-right">Modified</th>
+                <th className="p-3 font-normal">Object Name</th>
+                <th className="p-3 font-normal text-right">Size</th>
+                <th className="p-3 font-normal text-right">Modified</th>
               </tr>
             </thead>
             <tbody className="font-mono text-xs">
@@ -1070,7 +1052,7 @@ export default function App() {
                   <tr 
                     key={file.id}
                     className={cn(
-                      "cursor-pointer transition-colors group",
+                      "cursor-pointer transition-colors group min-h-[48px]",
                       isSelected && isActive && "nc-cursor",
                       isSelected && !isActive && "nc-selected"
                     )}
@@ -1079,15 +1061,19 @@ export default function App() {
                       setActivePanel(side);
                       setLeftPanel(p => ({ ...p, selectedIndex: idx }));
                     }}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      handleFileAction(side, file);
+                    }}
                   >
-                    <td className="p-2 flex items-center gap-3">
-                      {file.type === 'dir' ? <Folder size={14} className="text-nc-yellow opacity-80" /> : <FileText size={14} className="text-nc-accent opacity-80" />}
-                      <span className="truncate max-w-[180px] tracking-tight">{file.name}</span>
+                    <td className="p-3 flex items-center gap-3">
+                      {file.type === 'dir' ? <Folder size={16} className="text-nc-yellow opacity-80" /> : <FileText size={16} className="text-nc-accent opacity-80" />}
+                      <span className="truncate max-w-[180px] tracking-tight py-1">{file.name}</span>
                     </td>
-                    <td className="p-2 text-right opacity-60">
+                    <td className="p-3 text-right opacity-60">
                       {file.type === 'dir' ? 'DIR' : `${file.size}B`}
                     </td>
-                    <td className="p-2 text-right opacity-40 text-[10px]">
+                    <td className="p-3 text-right opacity-40 text-[10px]">
                       {file.date}
                     </td>
                   </tr>
@@ -1116,7 +1102,7 @@ export default function App() {
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setChatMessages([{ role: 'assistant', content: 'CHAT_HISTORY_PURGED. SYSTEM_READY.', timestamp: new Date() }])}
-              className="text-[8px] text-nc-gray hover:text-nc-accent uppercase transition-colors"
+              className="text-[9px] text-nc-gray hover:text-nc-accent uppercase transition-colors py-2 px-3 min-h-[36px]"
             >
               [ CLEAR_CHAT ]
             </button>
@@ -1201,7 +1187,7 @@ export default function App() {
               <button 
                 onClick={() => setAgentSubTab('chat')}
                 className={cn(
-                  "px-3 py-1 text-[9px] font-bold uppercase tracking-widest transition-all rounded",
+                  "px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-all rounded min-h-[40px]",
                   agentSubTab === 'chat' ? "bg-nc-accent text-nc-black" : "text-nc-gray hover:text-nc-accent"
                 )}
               >
@@ -1213,7 +1199,7 @@ export default function App() {
                   if (!browserData.screenshot) refreshBrowser();
                 }}
                 className={cn(
-                  "px-3 py-1 text-[9px] font-bold uppercase tracking-widest transition-all rounded",
+                  "px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-all rounded min-h-[40px]",
                   agentSubTab === 'browser' ? "bg-nc-accent text-nc-black" : "text-nc-gray hover:text-nc-accent"
                 )}
               >
@@ -1230,7 +1216,7 @@ export default function App() {
             )}
             <button 
               onClick={() => setAgentMessages([{ role: 'assistant', content: 'AGENT_MEMORY_PURGED. RESTARTING_SESSION.', timestamp: new Date() }])}
-              className="text-[8px] text-nc-gray hover:text-nc-accent uppercase transition-colors"
+              className="text-[9px] text-nc-gray hover:text-nc-accent uppercase transition-colors py-2 px-3"
             >
               [ PURGE_MEMORY ]
             </button>
@@ -1400,15 +1386,15 @@ export default function App() {
   const renderBrowserView = () => {
     return (
       <div className="flex-1 flex flex-col bg-nc-black overflow-hidden">
-        <div className="p-3 bg-nc-panel border-b border-nc-border flex items-center gap-3">
-          <div className="flex gap-1">
-            <button onClick={() => browserScroll('up')} className="p-1.5 text-nc-gray hover:text-nc-accent transition-colors"><ArrowUpCircle size={14} /></button>
-            <button onClick={() => browserScroll('down')} className="p-1.5 text-nc-gray hover:text-nc-accent transition-colors"><ArrowDownCircle size={14} /></button>
+        <div className="p-4 bg-nc-panel border-b border-nc-border flex items-center gap-4">
+          <div className="flex gap-2">
+            <button onClick={() => browserScroll('up')} className="p-2.5 text-nc-gray hover:text-nc-accent transition-colors bg-nc-black/30 rounded"><ArrowUpCircle size={18} /></button>
+            <button onClick={() => browserScroll('down')} className="p-2.5 text-nc-gray hover:text-nc-accent transition-colors bg-nc-black/30 rounded"><ArrowDownCircle size={18} /></button>
           </div>
           <div className="flex-1 relative">
-            <Globe size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-nc-gray" />
+            <Globe size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-nc-gray" />
             <input 
-              className="w-full bg-nc-black border border-nc-border pl-8 pr-3 py-1.5 text-[10px] font-mono text-nc-white outline-none focus:border-nc-accent transition-colors rounded"
+              className="w-full bg-nc-black border border-nc-border pl-10 pr-3 py-2.5 text-[11px] font-mono text-nc-white outline-none focus:border-nc-accent transition-colors rounded"
               value={browserUrlInput}
               onChange={(e) => setBrowserUrlInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && browserGoto(browserUrlInput)}
@@ -1416,9 +1402,9 @@ export default function App() {
           </div>
           <button 
             onClick={refreshBrowser}
-            className="p-1.5 text-nc-gray hover:text-nc-accent transition-colors"
+            className="p-2.5 text-nc-gray hover:text-nc-accent transition-colors bg-nc-black/30 rounded"
           >
-            <RefreshCw size={14} className={isBrowserLoading ? 'animate-spin' : ''} />
+            <RefreshCw size={18} className={isBrowserLoading ? 'animate-spin' : ''} />
           </button>
         </div>
 
@@ -1447,14 +1433,14 @@ export default function App() {
           )}
         </div>
 
-        <div className="p-3 bg-nc-panel border-t border-nc-border flex items-center gap-3">
-          <div className="flex items-center gap-2 text-[9px] text-nc-gray uppercase font-bold">
-            <MousePointer2 size={10} />
-            <span>INTERACTIVE_MODE</span>
+        <div className="p-4 bg-nc-panel border-t border-nc-border flex items-center gap-4">
+          <div className="flex items-center gap-2 text-[10px] text-nc-gray uppercase font-bold">
+            <MousePointer2 size={12} />
+            <span className="hidden sm:inline">INTERACTIVE_MODE</span>
           </div>
-          <div className="flex-1 flex gap-2">
+          <div className="flex-1 flex gap-3">
             <input 
-              className="flex-1 bg-nc-black border border-nc-border px-3 py-1.5 text-[10px] font-mono text-nc-white outline-none focus:border-nc-accent transition-colors rounded"
+              className="flex-1 bg-nc-black border border-nc-border px-4 py-2.5 text-[11px] font-mono text-nc-white outline-none focus:border-nc-accent transition-colors rounded"
               placeholder="TYPE_INTO_BROWSER..."
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -1465,7 +1451,7 @@ export default function App() {
             />
             <button 
               onClick={() => browserType('', 'Enter')}
-              className="px-3 py-1 bg-nc-accent/10 border border-nc-accent/30 text-nc-accent text-[9px] font-bold uppercase hover:bg-nc-accent hover:text-nc-black transition-all"
+              className="px-5 py-2.5 bg-nc-accent/10 border border-nc-accent/30 text-nc-accent text-[10px] font-bold uppercase hover:bg-nc-accent hover:text-nc-black transition-all min-h-[44px]"
             >
               [ ENTER ]
             </button>
@@ -1569,7 +1555,7 @@ export default function App() {
             {selectedFile && (
               <button 
                 onClick={saveFile}
-                className="text-[9px] bg-nc-accent/20 hover:bg-nc-accent text-nc-accent hover:text-nc-black px-2 py-0.5 rounded transition-all font-bold"
+                className="text-[10px] bg-nc-accent/20 hover:bg-nc-accent text-nc-accent hover:text-nc-black px-4 py-2 rounded transition-all font-bold min-h-[36px]"
               >
                 [ COMMIT_CHANGES ]
               </button>
@@ -1664,7 +1650,7 @@ export default function App() {
           </div>
           
           {/* Tab Navigation */}
-          <div className="flex gap-2 ml-4 border-l border-nc-border pl-4">
+          <div className="flex flex-wrap gap-2 ml-4 border-l border-nc-border pl-4">
             {[
               { id: 'filesystem', label: 'FILESYSTEM', icon: Folder },
               { id: 'coding', label: 'CODING', icon: Terminal },
@@ -1676,13 +1662,13 @@ export default function App() {
                 key={t.id}
                 onClick={() => setActiveTab(t.id as any)}
                 className={cn(
-                  "flex items-center gap-2 px-3 py-1 text-[10px] font-bold uppercase tracking-widest transition-all rounded",
+                  "flex items-center gap-2 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest transition-all rounded min-h-[44px]",
                   activeTab === t.id 
-                    ? "bg-nc-accent text-nc-black" 
+                    ? "bg-nc-accent text-nc-black shadow-[0_0_15px_rgba(var(--nc-accent-rgb),0.3)]" 
                     : "text-nc-gray hover:text-nc-accent hover:bg-nc-accent/10"
                 )}
               >
-                <t.icon size={12} />
+                <t.icon size={14} />
                 {t.label}
               </button>
             ))}
@@ -1706,24 +1692,24 @@ export default function App() {
             </button>
           </div>
         </div>
-        <div className="flex gap-6 text-[10px] text-nc-gray font-mono uppercase tracking-widest items-center">
+        <div className="flex flex-wrap gap-6 text-[10px] text-nc-gray font-mono uppercase tracking-widest items-center">
           <button 
             onClick={() => window.open(window.location.origin, '_blank')}
-            className="flex items-center gap-2 text-nc-accent hover:text-nc-white transition-colors"
+            className="flex items-center gap-2 text-nc-accent hover:text-nc-white transition-colors min-h-[44px] px-2"
           >
-            <ExternalLink size={14} />
+            <ExternalLink size={16} />
             <span className="font-bold">[ LAUNCH_PREVIEW ]</span>
           </button>
           <button 
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 hover:text-nc-accent transition-colors"
+            className="flex items-center gap-2 hover:text-nc-accent transition-colors min-h-[44px] px-2"
           >
-            <Upload size={14} />
+            <Upload size={16} />
             <span className="text-nc-white">[ UPLOAD ]</span>
           </button>
           <button 
             onClick={() => setShowSettings(true)}
-            className="flex items-center gap-2 hover:text-nc-accent transition-colors"
+            className="flex items-center gap-2 hover:text-nc-accent transition-colors min-h-[44px] px-2"
           >
             <span className="opacity-50">SETTINGS:</span>
             <span className="text-nc-white">[ CONFIG ]</span>
@@ -1986,13 +1972,13 @@ export default function App() {
               <div className="flex gap-4">
                 <button 
                   onClick={() => setShowEditor(null)}
-                  className="px-6 py-2 text-xs uppercase tracking-widest text-nc-gray hover:text-nc-white transition-colors"
+                  className="px-8 py-3 text-xs uppercase tracking-widest text-nc-gray hover:text-nc-white transition-colors min-h-[44px]"
                 >
                   ABORT
                 </button>
                 <button 
                   onClick={saveFile}
-                  className="px-8 py-2 bg-nc-accent text-nc-black font-bold text-xs uppercase tracking-widest hover:bg-nc-white transition-all active:scale-95"
+                  className="px-10 py-3 bg-nc-accent text-nc-black font-bold text-xs uppercase tracking-widest hover:bg-nc-white transition-all active:scale-95 min-h-[44px]"
                 >
                   COMMIT CHANGES (F2)
                 </button>
@@ -2059,10 +2045,10 @@ export default function App() {
                 </div>
               </div>
             </div>
-            <div className="p-4 flex justify-center bg-nc-black border-t border-nc-border">
+            <div className="p-6 flex justify-center bg-nc-black border-t border-nc-border">
               <button 
                 onClick={() => setShowTodo(false)}
-                className="px-12 py-2 bg-nc-accent text-nc-black font-bold text-xs uppercase tracking-widest hover:bg-nc-white transition-all active:scale-95"
+                className="px-16 py-3 bg-nc-accent text-nc-black font-bold text-xs uppercase tracking-widest hover:bg-nc-white transition-all active:scale-95 min-h-[48px]"
               >
                 RETURN_TO_COMMAND
               </button>
@@ -2092,16 +2078,16 @@ export default function App() {
                 </div>
               </div>
               
-              <div className="flex gap-4 pt-4">
+              <div className="flex gap-4 pt-6">
                 <button 
                   onClick={() => setShowSaveConfirm(false)}
-                  className="flex-1 py-3 border border-nc-border text-nc-gray hover:text-nc-white hover:border-nc-white transition-all text-[10px] font-bold uppercase tracking-widest"
+                  className="flex-1 py-4 border border-nc-border text-nc-gray hover:text-nc-white hover:border-nc-white transition-all text-[11px] font-bold uppercase tracking-widest min-h-[48px]"
                 >
                   [ ABORT_SAVE ]
                 </button>
                 <button 
                   onClick={performSave}
-                  className="flex-1 py-3 bg-nc-yellow text-nc-black hover:bg-nc-white transition-all text-[10px] font-bold uppercase tracking-widest"
+                  className="flex-1 py-4 bg-nc-yellow text-nc-black hover:bg-nc-white transition-all text-[11px] font-bold uppercase tracking-widest min-h-[48px]"
                 >
                   [ CONFIRM_COMMIT ]
                 </button>
