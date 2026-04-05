@@ -30,7 +30,7 @@ const upload = multer({ storage: storage });
 
 async function startServer() {
   const app = express();
-  const PORT = Number(process.env.PORT) || 3000;
+  const PORT = Number(process.env.PORT) || 8181;
 
   app.use(express.json());
 
@@ -131,27 +131,6 @@ async function startServer() {
         await page!.mouse.wheel(0, -500);
       }
       await page!.waitForTimeout(300);
-      const screenshot = await page!.screenshot({ type: 'jpeg', quality: 80 });
-      res.json({ 
-        url: page!.url(), 
-        title: await page!.title(),
-        screenshot: screenshot.toString('base64') 
-      });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/browser/nav", async (req, res) => {
-    const { action } = req.body;
-    try {
-      const { page } = await ensureBrowser();
-      if (action === 'back') {
-        await page!.goBack();
-      } else if (action === 'forward') {
-        await page!.goForward();
-      }
-      await page!.waitForTimeout(500);
       const screenshot = await page!.screenshot({ type: 'jpeg', quality: 80 });
       res.json({ 
         url: page!.url(), 
