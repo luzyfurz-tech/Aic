@@ -1,0 +1,5 @@
+{
+  "name": "Remix: AI Commander",
+  "description": "A classic two-pane file manager enhanced with AI capabilities for file analysis, manipulation, and natural language commands.",
+  "requestFramePermissions": []
+}

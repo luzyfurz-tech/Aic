@@ -1,0 +1,77 @@
+{
+  "entities": {
+    "Command": {
+      "title": "Command",
+      "description": "A command sent to the Raspberry Pi.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "command": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["pending", "executing", "completed", "failed"] },
+        "uid": { "type": "string" }
+      },
+      "required": ["command", "timestamp", "status", "uid"]
+    },
+    "Response": {
+      "title": "Response",
+      "description": "The output from a command executed on the Raspberry Pi.",
+      "type": "object",
+      "properties": {
+        "commandId": { "type": "string" },
+        "output": { "type": "string" },
+        "error": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "uid": { "type": "string" }
+      },
+      "required": ["commandId", "output", "timestamp", "uid"]
+    },
+    "FileEntry": {
+      "title": "FileEntry",
+      "description": "A file or directory entry from the Raspberry Pi's filesystem.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["file", "dir"] },
+        "size": { "type": "number" },
+        "date": { "type": "string" },
+        "parentId": { "type": "string" },
+        "content": { "type": "string" },
+        "uid": { "type": "string" }
+      },
+      "required": ["name", "type", "date", "uid"]
+    },
+    "PiStatus": {
+      "title": "PiStatus",
+      "description": "The online status and metadata of the Raspberry Pi.",
+      "type": "object",
+      "properties": {
+        "online": { "type": "boolean" },
+        "lastSeen": { "type": "string", "format": "date-time" },
+        "hostname": { "type": "string" },
+        "os": { "type": "string" },
+        "uid": { "type": "string" }
+      },
+      "required": ["online", "lastSeen", "uid"]
+    }
+  },
+  "firestore": {
+    "/commands/{commandId}": {
+      "schema": "Command",
+      "description": "Queue of commands for the Pi."
+    },
+    "/responses/{responseId}": {
+      "schema": "Response",
+      "description": "Output from the Pi."
+    },
+    "/filesystem/{fileId}": {
+      "schema": "FileEntry",
+      "description": "Mirrored filesystem from the Pi."
+    },
+    "/pi_status/{uid}": {
+      "schema": "PiStatus",
+      "description": "Status of the connected Pi."
+    }
+  }
+}
